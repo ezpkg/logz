@@ -6,7 +6,12 @@ package logz // import ezpkg.io/logz
 
 import (
 	"context"
+	"io"
+	"log/slog"
 )
+
+type Handler = slog.Handler
+type Attr = slog.Attr
 
 type Logger interface {
 	Debugw(msg string, keyValues ...any)
@@ -19,6 +24,7 @@ type Logger interface {
 	Warnf(format string, args ...any)
 	Errorf(format string, args ...any)
 
+	Enabled(ctx context.Context, level Level) bool
 	With(keyValues ...any) Logger
 }
 
@@ -63,41 +69,32 @@ type logger0ctx interface {
 	ErrorContext(ctx context.Context, msg string, args ...any)
 }
 
+func New(h Handler) Logger {
+	opt := Option{
+		enabler: func(ctx context.Context, level Level) bool {
+			return h.Enabled(ctx, level)
+		},
+	}
+	sl := slog.New(h)
+	return opt.FromLoggerI(sl)
+}
+
+func DefaultLogger(w io.Writer) Logger {
+	return New(NewTextHandler(w, nil))
+}
+
 func FromLoggerP(logger LoggerP) Logger {
-	return &pLogger{l: logger}
+	return Option{}.FromLoggerP(logger)
 }
-
 func FromLoggerI(logger LoggerI) Logger {
-	return &xLogger{w: wrapW{logger}}
+	return Option{}.FromLoggerI(logger)
 }
-
 func FromLoggerw(logger Loggerw) Logger {
-	switch logger := logger.(type) {
-	case Logger:
-		return logger
-	case Loggerx:
-		return &xLogger{w: logger, f: logger}
-	default:
-		return &xLogger{w: logger}
-	}
+	return Option{}.FromLoggerw(logger)
 }
-
 func FromLoggerf(logger Loggerf) Logger {
-	switch logger := logger.(type) {
-	case Logger:
-		return logger
-	case Loggerx:
-		return &xLogger{w: logger, f: logger}
-	default:
-		return &xLogger{f: logger}
-	}
+	return Option{}.FromLoggerf(logger)
 }
-
 func FromLoggerx(logger Loggerx) Logger {
-	switch logger := logger.(type) {
-	case Logger:
-		return logger
-	default:
-		return &xLogger{w: logger, f: logger}
-	}
+	return Option{}.FromLoggerx(logger)
 }
